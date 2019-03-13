@@ -2,7 +2,6 @@
 using System;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using System.IO;
@@ -80,8 +79,15 @@ namespace MQTTnet.Implementations
 
         public void Dispose()
         {
-            TryDispose(_stream, () => _stream = null);
-            TryDispose(_socket, () => _socket = null);
+            Cleanup(ref _stream, s => s.Dispose());
+            Cleanup(ref _socket, s =>
+            {
+                if (s.Connected)
+                {
+                    s.Shutdown(SocketShutdown.Both);
+                }
+                s.Dispose();
+            });
         }
 
         private bool InternalUserCertificateValidationCallback(object sender, X509Certificate x509Certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
@@ -103,7 +109,7 @@ namespace MQTTnet.Implementations
                 return true;
             }
 
-            if (chain.ChainStatus.Any(c => c.Status == X509ChainStatusFlags.RevocationStatusUnknown || c.Status == X509ChainStatusFlags.Revoked || c.Status == X509ChainStatusFlags.RevocationStatusUnknown))
+            if (chain.ChainStatus.Any(c => c.Status == X509ChainStatusFlags.RevocationStatusUnknown || c.Status == X509ChainStatusFlags.Revoked || c.Status == X509ChainStatusFlags.OfflineRevocation))
             {
                 if (!_options.TlsOptions.IgnoreCertificateRevocationErrors)
                 {
@@ -143,21 +149,22 @@ namespace MQTTnet.Implementations
             _stream = new NetworkStream(_socket, true);
         }
 
-        private static void TryDispose(IDisposable disposable, Action afterDispose)
+        private static void Cleanup<T>(ref T item, Action<T> handler) where T : class
         {
+            var temp = item;
+            item = null;
             try
             {
-                disposable?.Dispose();
+                if (temp != null)
+                {
+                    handler(temp);
+                }
             }
             catch (ObjectDisposedException)
             {
             }
             catch (NullReferenceException)
             {
-            }
-            finally
-            {
-                afterDispose();
             }
         }
     }

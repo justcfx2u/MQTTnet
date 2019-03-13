@@ -20,8 +20,8 @@ namespace MQTTnet.Implementations
         private readonly CancellationToken _cancellationToken;
         private readonly AddressFamily _addressFamily;
         private readonly MqttServerTcpEndpointBaseOptions _options;
+        private readonly MqttServerTlsTcpEndpointOptions _tlsOptions;
         private readonly X509Certificate2 _tlsCertificate;
-
         private Socket _socket;
 
         public MqttTcpServerListener(
@@ -36,6 +36,11 @@ namespace MQTTnet.Implementations
             _tlsCertificate = tlsCertificate;
             _cancellationToken = cancellationToken;
             _logger = logger.CreateChildLogger(nameof(MqttTcpServerListener));
+            
+            if (_options is MqttServerTlsTcpEndpointOptions tlsOptions)
+            {
+                _tlsOptions = tlsOptions;
+            }
         }
 
         public event EventHandler<MqttServerAdapterClientAcceptedEventArgs> ClientAccepted;
@@ -71,7 +76,11 @@ namespace MQTTnet.Implementations
                     clientSocket.NoDelay = true;
 
                     var protocol = _addressFamily == AddressFamily.InterNetwork ? "ipv4" : "ipv6";
-                    _logger.Verbose($"Client '{clientSocket.RemoteEndPoint}' accepted by TCP listener '{_socket.LocalEndPoint}, {protocol}'.");
+
+                    _logger.Verbose("Client '{0}' accepted by TCP listener '{1}, {2}'.",
+                        clientSocket.RemoteEndPoint,
+                        _socket.LocalEndPoint,
+                        _addressFamily == AddressFamily.InterNetwork ? "ipv4" : "ipv6");
 
                     var clientAdapter = new MqttChannelAdapter(new MqttTcpChannel(clientSocket), new MqttPacketSerializer(), _logger);
                     ClientAccepted?.Invoke(this, new MqttServerAdapterClientAcceptedEventArgs(clientAdapter));
