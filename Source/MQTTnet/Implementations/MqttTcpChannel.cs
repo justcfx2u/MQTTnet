@@ -17,7 +17,7 @@ namespace MQTTnet.Implementations
     {
         private readonly IMqttClientOptions _clientOptions;
         private readonly MqttClientTcpOptions _options;
-        
+
         private Socket _socket;
         private Stream _stream;
 
@@ -34,11 +34,11 @@ namespace MQTTnet.Implementations
         /// called on server, sockets are passed in
         /// connect will not be called
         /// </summary>
-        public MqttTcpChannel(Socket socket, SslStream sslStream)
+        public MqttTcpChannel(Socket socket)
         {
             _socket = socket ?? throw new ArgumentNullException(nameof(socket));
 
-            CreateStream(sslStream);
+            CreateStream();
         }
 
         [Obsolete("There is a new callback at the TLS options. This one will be deleted soon.")]
@@ -59,14 +59,7 @@ namespace MQTTnet.Implementations
             await _socket.ConnectAsync(_options.Server, _options.GetPort()).ConfigureAwait(false);
 #endif
 
-            SslStream sslStream = null;
-            if (_options.TlsOptions.UseTls)
-            {
-                sslStream = new SslStream(new NetworkStream(_socket, true), false, InternalUserCertificateValidationCallback);
-                await sslStream.AuthenticateAsClientAsync(_options.Server, LoadCertificates(), SslProtocols.Tls12, _options.TlsOptions.IgnoreCertificateRevocationErrors).ConfigureAwait(false);
-            }
-
-            CreateStream(sslStream);
+            CreateStream();
         }
 
         public Task DisconnectAsync()
@@ -96,7 +89,7 @@ namespace MQTTnet.Implementations
             // Try the instance callback.
             if (_options.TlsOptions.CertificateValidationCallback != null)
             {
-                return _options.TlsOptions.CertificateValidationCallback(x509Certificate, chain, sslPolicyErrors,_clientOptions);
+                return _options.TlsOptions.CertificateValidationCallback(x509Certificate, chain, sslPolicyErrors, _clientOptions);
             }
 
             // Try static callback.
@@ -145,16 +138,9 @@ namespace MQTTnet.Implementations
             return certificates;
         }
 
-        private void CreateStream(Stream stream)
+        private void CreateStream()
         {
-            if (stream != null)
-            {
-                _stream = stream;
-            }
-            else
-            {
-                _stream = new NetworkStream(_socket, true);
-            }
+            _stream = new NetworkStream(_socket, true);
         }
 
         private static void TryDispose(IDisposable disposable, Action afterDispose)
